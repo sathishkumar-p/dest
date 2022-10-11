@@ -1,0 +1,64 @@
+name: Git Sync
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      isSync:
+        required: true
+        type: string
+        default: 'yes'
+    secrets:
+      PAT:
+        required: true  
+env:
+  PUBLIC_SRC_REPO: https://github.com/sathishkumar-p/src.git
+  PUBLIC_SRC_BRANCH: dev
+  DEST_REPO: https://github.com/sathishkumar-p/dest.git
+  DEST_STAGING_BRANCH: dev
+  DEST_BRANCH: main
+
+jobs:
+  gitsync:
+    name: "Git Sync"
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Check out repository code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          
+      - name: Sync code with Public repo
+        uses: repo-sync/github-sync@v2.3.0
+        with:
+          source_repo: "$PUBLIC_SRC_REPO"
+          source_branch: "$PUBLIC_SRC_BRANCH"
+          destination_repo: "$DEST_REPO"
+          destination_branch: "$DEST_STAGING_BRANCH"
+          github_token: ${{ secrets.PAT }}
+      
+
+      - name: Get the PR Info
+        id: prInfo
+        run: |
+          echo ::set-output name=title::$(git log origin/$DEST_STAGING_BRANCH -1 --pretty=%s)
+          echo ::set-output name=body::$(git log origin/$DEST_STAGING_BRANCH -1)
+          echo ::set-output name=dest_staging_branch::$DEST_STAGING_BRANCH
+          echo ::set-output name=dest_branch::$DEST_BRANCH 
+          echo $(git log origin/$DEST_BRANCH..origin/$DEST_STAGING_BRANCH --oneline --no-merges)
+          echo ::set-output name=diff::$(git log origin/$DEST_BRANCH..origin/$DEST_STAGING_BRANCH --oneline --no-merges)
+      
+      - name: Create Pull Request
+        if: ${{ steps.prInfo.outputs.diff != '' }}
+        id: cpr
+        run: |
+          echo ::set-output name=number::$(gh pr create --base ${{ steps.prInfo.outputs.dest_branch }} --head ${{ steps.prInfo.outputs.dest_staging_branch }} --title "${{ steps.prInfo.outputs.title }}" --body "${{ steps.prInfo.outputs.body }}" --label automerge | grep -o '[0-9]\+')
+          
+      - name: Merge a pull request
+        if: ${{ steps.prInfo.outputs.diff != '' }}
+        uses: sudo-bot/action-pull-request-merge@v1.1.1
+        with:
+            github-token: ${{ secrets.PAT }}
+            number: ${{ steps.cpr.outputs.number }}
+            filter-label: automerge
+
