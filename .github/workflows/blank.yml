@@ -33,7 +33,6 @@ jobs:
         with:
           source_repo: "$PUBLIC_SRC_REPO"
           source_branch: "$PUBLIC_SRC_BRANCH"
-          destination_repo: "$DEST_REPO"
           destination_branch: "$DEST_STAGING_BRANCH"
           github_token: ${{ secrets.PAT }}
       
